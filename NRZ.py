@@ -1,10 +1,8 @@
 # -*- coding: GB2312 -*-
 import pandas as pd
+# 导包
+import configparser
 
-NRZ= 1#NRZ编码
-MCS= 0#曼切斯特编码
-
-BM=1#设置编码格式
 
 def crc8(data):
     crc = 0
@@ -49,6 +47,27 @@ def manchester_decode(signal):
     return decoded_bits
 
 
+
+config = configparser.ConfigParser() # 类实例化
+
+
+NRZ= 1#NRZ编码
+MCS= 0#曼切斯特编码
+path = r'config.ini'
+if(config.read(path)):
+    BM = int(config['select']['bm'])#编码格式
+    BPS = int(config['select']['bps'])#波特率
+    
+else:
+    config.add_section("select")
+    config.set("select","bm","1")
+    config.set("select","bps","19200")
+    config.write(open(path,"w"))
+    BM=1
+    BPS=19200
+
+
+
 # 读取Excel数据
 data = pd.read_excel('1.xlsx', header=None)
 
@@ -81,7 +100,7 @@ bin_signal.append(signal_bak)
 signal_count=0
 
 
-bps = 19200  ###########设置波特率
+bps = BPS  ###########设置波特率
 bit_time = 1 / bps
 total_time=10/1000#设置屏幕总时间(s)50ms,
 total_count=1000#总点数10000个点
@@ -207,12 +226,14 @@ for i in range(0,len(data)):
     data_hex.append(hex(data[i]))
 print('解析数据：',data_hex)
 
+crc_flag=0#crc标志符
 if(len(data)>9):#大才行
     if(BM==MCS):#曼码解码
         #解析数据
         data_msg=data[2:2+8]
         print("曼码解码数据：",data_msg)
         if((crc8(data_msg)==0) and (len(data_msg)>0)):
+            crc_flag=1
             print("CRC校验通过！")
             print("可用数据",data_msg[:7])
             print("ID:  ",data_msg[:4])
@@ -250,6 +271,7 @@ if(len(data)>9):#大才行
                 data_msg=data[i:i+9]
                 break
         if((crc16(data_msg)==0) and (len(data_msg)>0)):
+            crc_flag=1
             print("CRC校验通过！")
             print("可用数据",data_msg[:7])
             print("ID:  ",data_msg[:4])
@@ -272,10 +294,38 @@ if(len(data)>9):#大才行
 
 # print(data_hex)
 # 将逻辑信号保存到文件
-with open('logic_signal.txt', 'a') as f:
+with open('result.txt', 'w') as f:
+    f.write("报文解析：")
     for sublist in data_hex:
         for item in sublist:
             f.write(str(item))
         f.write(",")
     f.write("\n")
+    if(crc_flag==1):
+        str1="可用数据"+str(data_msg[:7])
+        f.write(str1+"\n")
+        str1="ID:  "+str(data_msg[:4])
+        f.write(str1+"\n")
+        str1="PRE: "+str(data_msg[4:5][0]*5.5)+"Kpa"
+        f.write(str1+"\n")
+        str1="TEMP:"+str(data_msg[5:6][0]-50)+"℃"
+        f.write(str1+"\n")
+        str1="Flag:"+str(flag)
+        f.write(str1+"\n")
+        if(flag==0xd7):
+            str1="特殊学习码！"
+            f.write(str1+"\n")
+        elif(flag==0x81):
+            str1="快漏！"
+            f.write(str1+"\n")
+        elif(flag==0x82):
+            str1="LF触发响应报文！"
+            f.write(str1+"\n")
+        else:
+            str1="信息类型:    "+str(flag%1)
+            f.write(str1+"\n")
+            str1="传感器模式:  "+str((flag&0xe)>>1)
+            f.write(str1+"\n")
+            str1="接收信息:    "+str((flag&0x20)>>5)
+            f.write(str1+"\n")
 

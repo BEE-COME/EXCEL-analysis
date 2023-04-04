@@ -160,7 +160,7 @@ if(BM==MCS):#曼码#按位获取
         elif(state==3):
             if(bin_signal_bak[i]==0):#第16个数是1
                 state=0
-                bin_signal=bin_signal_bak[i-31:i-31+162]
+                bin_signal=bin_signal_bak[i-31:i-31+162]#取10byte+1bit
                 print(bin_signal)
                 print(i)
                 break

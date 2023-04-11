@@ -29,22 +29,33 @@ def crc16(data):
     crc &= 0xFFFF
     return crc
 
-# 标准曼彻斯特编码解码函数
+# 曼彻斯特编码解码函数
 def manchester_decode(signal):
     # 将输入信号划分为等长的比特位
     bits = [signal[i:i+2] for i in range(0, len(signal), 2)]
     # 解码每个比特位的数字信号
     decoded_bits = []
     
-    for bit in bits:
-        if bit[0] == 0 and bit[1] == 1:
-            decoded_bits.append(0)
-        elif bit[0] == 1 and bit[1] == 0:
-            decoded_bits.append(1)
-        else:
-            continue
-            # raise ValueError()
-    return decoded_bits
+    if(BM==FMCS):#反向曼码
+        for bit in bits:
+            if bit[0] == 0 and bit[1] == 1:
+                decoded_bits.append(1)
+            elif bit[0] == 1 and bit[1] == 0:
+                decoded_bits.append(0)
+            else:
+                continue
+                # raise ValueError()
+        return decoded_bits
+    else:
+        for bit in bits:
+            if bit[0] == 0 and bit[1] == 1:
+                decoded_bits.append(0)
+            elif bit[0] == 1 and bit[1] == 0:
+                decoded_bits.append(1)
+            else:
+                continue
+                # raise ValueError()
+        return decoded_bits
 
 
 
@@ -53,18 +64,22 @@ config = configparser.ConfigParser() # 类实例化
 
 NRZ= 1#NRZ编码
 MCS= 0#曼切斯特编码
+FMCS= 2#反向曼切斯特编码
+
 path = r'config.ini'
 if(config.read(path)):
     BM = int(config['select']['bm'])#编码格式
     BPS = int(config['select']['bps'])#波特率
-    
+    time=int(config['select']['time'])#ms
 else:
     config.add_section("select")
     config.set("select","bm","1")
     config.set("select","bps","19200")
+    config.set("select","time","10")
     config.write(open(path,"w"))
     BM=1
     BPS=19200
+    time=10
 
 
 
@@ -87,7 +102,6 @@ for i in range(0,len(signal[0])):
     avg+=signal[0][i]
 avg=avg/len(signal[0])
 print("平均数",avg)
-# avg=220000
 for i in range(0,len(signal[0])):
     if(signal[0][i]>avg):##############根据实际纵坐标设置
         signal_bak_g.append(1)
@@ -96,13 +110,14 @@ for i in range(0,len(signal[0])):
 ##############
 signal_bak=signal_bak_g[0]
 bin_signal = []
-bin_signal.append(signal_bak)
+# bin
+#_signal.append(signal_bak)
 signal_count=0
 
 
 bps = BPS  ###########设置波特率
 bit_time = 1 / bps
-total_time=10/1000#设置屏幕总时间(s)50ms,
+total_time=time/1000#设置屏幕总时间(s)50ms,
 total_count=1000#总点数10000个点
 excel_bit_time=total_time/total_count
 bps_count = bit_time / excel_bit_time
@@ -167,8 +182,7 @@ if(BM==MCS):#曼码#按位获取
             else:
                 state=0
         if(i==len(bin_signal_bak)-1):#超出就清空
-            bin_signal.clear()
-    
+            bin_signal.clear()    
 
 
     if(len(bin_signal)%2!=0):
@@ -179,10 +193,9 @@ if(BM==MCS):#曼码#按位获取
     print('曼码转换数据长度：',len(bin_signal))
     for i in range(0,len(bin_signal)):       
         data_sg[i%8]=bin_signal[i]
-        if(i%8==0):
+        if(i%8==7):
             byte_value = (data_sg[0]<<7) + (data_sg[1]<<6) + (data_sg[2]<<5) + (data_sg[3]<<4) + (data_sg[4]<<3) + (data_sg[5]<<2) + (data_sg[6]<<1) + data_sg[7]   #前高后低
-            if(i!=0):
-                data.append(byte_value)
+            data.append(byte_value)
 
 elif(BM==NRZ):#NRZ
     for i in range(0,len(bin_signal)):
@@ -221,6 +234,49 @@ elif(BM==NRZ):#NRZ
                 # byte_value = (data_sg[0]<<7) + (data_sg[1]<<6) + (data_sg[2]<<5) + (data_sg[3]<<4) + (data_sg[4]<<3) + (data_sg[5]<<2) + (data_sg[6]<<1) + data_sg[7]   #前高后低
                 data.append((byte_value))
                 state=0
+elif(BM==FMCS):#反向曼码#按位获取
+    #寻找到七个连续的01，加上10,一共16个数
+    state=0
+    seach_count=0
+    bin_signal_bak=bin_signal
+    for i in range(0,len(bin_signal_bak)):
+        if(state==0):
+            if(bin_signal_bak[i]==0):
+                state=1
+            else:
+                seach_count=0
+        elif(state==1):
+            if(bin_signal_bak[i]==1):
+                state=0
+                seach_count+=1
+                if(seach_count>=8):#前15个数都是0
+                    state=3                    
+            else:
+                state=1#转回1，重新计数
+                seach_count=0
+        elif(state==3):
+            state=0
+            bin_signal=bin_signal_bak[i-16:i-16+208]#取10byte+1bit
+            print(bin_signal)
+            print(i)
+            break
+        
+        if(i==len(bin_signal_bak)-1):#超出就清空
+            bin_signal.clear()
+
+    if(len(bin_signal)%2!=0):
+        bin_signal.pop()
+    bin_signal=manchester_decode(bin_signal)
+    
+    print('曼码转换数据：',bin_signal)
+    print('曼码转换数据长度：',len(bin_signal))
+    for i in range(0,len(bin_signal)):       
+        data_sg[i%8]=bin_signal[i]
+        if(i%8==7):
+            byte_value = (data_sg[0]<<7) | (data_sg[1]<<6) | (data_sg[2]<<5) | (data_sg[3]<<4) | (data_sg[4]<<3) | (data_sg[5]<<2) | (data_sg[6]<<1) | data_sg[7]   #前高后低
+            data.append(byte_value)
+
+
 data_hex=[]
 for i in range(0,len(data)):
     data_hex.append(hex(data[i]))
@@ -231,6 +287,31 @@ if(len(data)>9):#大才行
     if(BM==MCS):#曼码解码
         #解析数据
         data_msg=data[2:2+8]
+        print("曼码解码数据：",data_msg)
+        if((crc8(data_msg)==0) and (len(data_msg)>0)):
+            crc_flag=1
+            print("CRC校验通过！")
+            print("可用数据",data_msg[:7])
+            print("ID:  ",data_msg[:4])
+            print("PRE: ",data_msg[4:5][0]*5.5,"Kpa")
+            print("TEMP:",data_msg[5:6][0]-50,"℃")
+            flag=data_msg[6:7][0]
+            print("Flag:",flag)
+            if(flag==0xd7):
+                print("特殊学习码！")
+            elif(flag==0x81):
+                print("快漏！")
+            elif(flag==0x82):
+                print("LF触发响应报文！")
+            else:
+                print("信息类型:    ",flag%1)
+                print("传感器模式:  ",(flag&0xe)>>1)
+                print("接收信息:    ",(flag&0x20)>>5)
+        else:
+            print("校验失败！")
+    elif(BM==FMCS):#反曼码解码
+        #解析数据
+        data_msg=data[3:3+8]
         print("曼码解码数据：",data_msg)
         if((crc8(data_msg)==0) and (len(data_msg)>0)):
             crc_flag=1
@@ -328,4 +409,6 @@ with open('result.txt', 'w') as f:
             f.write(str1+"\n")
             str1="接收信息:    "+str((flag&0x20)>>5)
             f.write(str1+"\n")
+
+input('Press Enter to exit...')
 

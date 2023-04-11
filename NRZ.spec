@@ -5,7 +5,7 @@ block_cipher = None
 
 
 a = Analysis(
-    ['NRZ.py'],
+    ['NRZ.PY'],
     pathex=[],
     binaries=[],
     datas=[],

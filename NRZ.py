@@ -1,4 +1,5 @@
 # -*- coding: GB2312 -*-
+import sys
 import pandas as pd
 # 导包
 import configparser
@@ -84,11 +85,19 @@ else:
 
 
 # 读取Excel数据
-data = pd.read_excel('1.xlsx', header=None)
+try:
+    data = pd.read_csv('1.csv', encoding='gbk',error_bad_lines=False)
+    # raise UnicodeDecodeError
+except UnicodeDecodeError as e:
+    print(e,"\nCSV文件打开错误！请清空前33行非内容！！！")
+    input('Press Enter to exit...')
+    sys.exit(1)
+# data = pd.read_csv('1.csv', encoding='gbk',error_bad_lines=False)
+# data = pd.read_excel('1.xlsx')
 
 # # 将每行数据存储为一个数组
 signal = []
-signal.append(data.iloc[:,0])#获取N行：M列
+signal.append(data.iloc[33:,0])#获取N行：M列
 # 语法格式：df.iloc[row_start:row_end , column_start:column_end]
 # 其中，row_start和row_end表示需要选择的行的开始和结束位置，column_start和column_end表示需要选择的列的开始和结束位置。
 
@@ -96,14 +105,14 @@ signal.append(data.iloc[:,0])#获取N行：M列
 # 对信号做第一次处理
 signal_bak_g=[]
 signal_bak=signal[0]
-
+# print(signal[0][33])
 avg=0
-for i in range(0,len(signal[0])):
-    avg+=signal[0][i]
+for i in range(33,len(signal[0])):#从第34行开始，免得需要换文件
+    avg+=float(signal[0][i])
 avg=avg/len(signal[0])
 print("平均数",avg)
-for i in range(0,len(signal[0])):
-    if(signal[0][i]>avg):##############根据实际纵坐标设置
+for i in range(33,len(signal[0])):
+    if(float(signal[0][i])>avg):##############根据实际纵坐标设置
         signal_bak_g.append(1)
     else:
         signal_bak_g.append(0)
@@ -250,16 +259,20 @@ elif(BM==FMCS):#反向曼码#按位获取
                 state=0
                 seach_count+=1
                 if(seach_count>=8):#前15个数都是0
-                    state=3                    
+                    state=2                    
             else:
                 state=1#转回1，重新计数
                 seach_count=0
-        elif(state==3):
-            state=0
-            bin_signal=bin_signal_bak[i-16:i-16+208]#取10byte+1bit
-            print(bin_signal)
-            print(i)
-            break
+        elif(state>=2):
+            if(bin_signal_bak[i]==1):            
+                state=0
+                bin_signal=bin_signal_bak[i-16:i-16+208]#取10byte+1bit
+                print(bin_signal)
+                print(i)
+                break
+            else:
+                state=1            
+            
         
         if(i==len(bin_signal_bak)-1):#超出就清空
             bin_signal.clear()

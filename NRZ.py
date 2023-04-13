@@ -82,8 +82,6 @@ else:
     BPS=19200
     time=10
 
-
-
 # ¶ÁÈ¡ExcelÊı¾İ
 try:
     data = pd.read_csv('1.csv', encoding='gbk',error_bad_lines=False)
